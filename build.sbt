@@ -61,6 +61,8 @@ lazy val `hyperbus-t-distributed-akka` = project.in(file("hyperbus-t-distributed
 
 lazy val `hyperbus-t-kafka` = project.in(file("hyperbus-t-kafka")).settings(defaultSettings) dependsOn(`hyperbus-transport`, `hyperbus-model`)
 
+lazy val `hyperbus-t-http-client` = project.in(file("hyperbus-t-http-client")).settings(defaultSettings) dependsOn(`hyperbus-transport`, `hyperbus-model`)
+
 lazy val `hyperbus-cli` = project.in(file("hyperbus-cli")).settings(defaultSettings) dependsOn(`hyperbus`, `hyperbus-t-distributed-akka`)
 
 lazy val `hyperbus-sbt-plugin` = project.in(file("hyperbus-sbt-plugin")).settings(defaultSettings) // dependsOn `hyperbus-transport`
