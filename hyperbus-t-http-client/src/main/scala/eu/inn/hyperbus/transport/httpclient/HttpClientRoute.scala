@@ -4,4 +4,4 @@ import eu.inn.hyperbus.transport.api.matchers.RequestMatcher
 
 case class HttpClientRoute(requestMatcher: RequestMatcher,
                            urlPrefix: String,
-                           kafkaPartitionKeys: List[String])
+                           additionalHeaders: Map[String,Seq[String]])

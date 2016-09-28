@@ -28,6 +28,8 @@ trait TransportMessage extends EntityWithHeaders {
 
 trait TransportRequest extends TransportMessage {
   def uri: Uri
+
+  def method: String
 }
 
 trait TransportResponse extends TransportMessage

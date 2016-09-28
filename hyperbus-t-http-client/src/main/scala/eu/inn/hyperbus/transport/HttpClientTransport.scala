@@ -1,22 +1,52 @@
 package eu.inn.hyperbus.transport
 
 import com.typesafe.config.Config
-import eu.inn.hyperbus.transport.api._
+import eu.inn.hyperbus.model.StandardResponse
+import eu.inn.hyperbus.serialization.MessageDeserializer
+import eu.inn.hyperbus.transport.api.{TransportRequest, _}
+import eu.inn.hyperbus.transport.httpclient.{ConfigLoader, HttpClientConfig, HttpClientRoute}
+import org.asynchttpclient.RequestBuilder
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 
-class HttpClientTransport()
+class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpClientRoute])
                          (implicit val executionContext: ExecutionContext) extends ClientTransport {
 
-  def this(config: Config) = this()(scala.concurrent.ExecutionContext.global) // todo: configurable ExecutionContext like in akka?
+  def this(config: Config) = this(
+    ConfigLoader.loadHttpClientConfig(config, "http"),
+    ConfigLoader.loadRoutes(config, "routes")
+  )(scala.concurrent.ExecutionContext.global) // todo: configurable ExecutionContext like in akka?
 
   protected[this] val log = LoggerFactory.getLogger(this.getClass)
+  protected[this] val httpClient = httpClientConfig.createHttpClient()
 
-  override def ask(message: TransportRequest, outputDeserializer: Deserializer[TransportResponse]): Future[TransportResponse] = ???
+  override def ask(request: TransportRequest, outputDeserializer: Deserializer[TransportResponse]): Future[TransportResponse] = {
+    findRoute(request).map { route ⇒
+      val requestBuilder = new RequestBuilder()
+      requestBuilder.setMethod(request.method)
+      requestBuilder.setUrl(route.urlPrefix + request.uri.formatted) // todo: implement rewrite
 
-  override def publish(message: TransportRequest): Future[PublishResult] = ???
+
+
+        ...
+    } getOrElse {
+      Future.failed(new NoTransportRouteException(s"HttpClientTransport. Uri: ${request.uri}"))
+    }
+  }
+
+  override def publish(message: TransportRequest): Future[PublishResult] =
+    ask(message, MessageDeserializer.deserializeResponseWith(_)(StandardResponse.apply)) map { response ⇒
+    new PublishResult {
+      override def sent: Option[Boolean] = Some(true)
+      override def offset: Option[String] = None
+    }
+  }
+
+  private def findRoute(request: TransportRequest): Option[HttpClientRoute] = {
+    routes.find(_.requestMatcher.matchMessage(request))
+  }
 
   override def shutdown(duration: FiniteDuration): Future[Boolean] = {
     Future {
