@@ -1,5 +1,6 @@
 package eu.inn.hyperbus.transport
 
+import com.sun.tools.javac.util.Log.PrefixKind
 import com.typesafe.config.Config
 import eu.inn.hyperbus.model.StandardResponse
 import eu.inn.hyperbus.serialization.MessageDeserializer
@@ -26,7 +27,7 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
     findRoute(request).map { route ⇒
       val requestBuilder = new RequestBuilder()
       requestBuilder.setMethod(request.method)
-      requestBuilder.setUrl(route.urlPrefix + request.uri.formatted) // todo: implement rewrite
+      requestBuilder.setUrl(appendUri(route.urlPrefix, extractUriAndQueryString(request))) // todo: implement rewrite
 
 
 
@@ -56,6 +57,19 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
       case e: Throwable ⇒
         log.error("Can't close http-client transport", e)
         false
+    }
+  }
+
+  private def extractUriAndQueryString(request: TransportRequest): String = {
+    request.
+  }
+
+  private def appendUri(prefix: String, postfix: String): String = {
+    if (prefix.endsWith("/") && postfix.startsWith("/")) {
+      prefix + postfix.substring(1)
+    }
+    else {
+      prefix + postfix
     }
   }
 }
