@@ -2,15 +2,15 @@ package eu.inn.hyperbus.transport
 
 import com.sun.tools.javac.util.Log.PrefixKind
 import com.typesafe.config.Config
-import eu.inn.hyperbus.model.StandardResponse
-import eu.inn.hyperbus.serialization.MessageDeserializer
+import eu.inn.hyperbus.model._
+import eu.inn.hyperbus.serialization.{MessageDeserializer, StringSerializer}
 import eu.inn.hyperbus.transport.api.{TransportRequest, _}
 import eu.inn.hyperbus.transport.httpclient.{ConfigLoader, HttpClientConfig, HttpClientRoute}
-import org.asynchttpclient.RequestBuilder
+import org.asynchttpclient.{AsyncCompletionHandler, RequestBuilder, Response}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 
 class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpClientRoute])
                          (implicit val executionContext: ExecutionContext) extends ClientTransport {
@@ -28,10 +28,26 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
       val requestBuilder = new RequestBuilder()
       requestBuilder.setMethod(request.method)
       requestBuilder.setUrl(appendUri(route.urlPrefix, extractUriAndQueryString(request))) // todo: implement rewrite
+      setHeaders(route.additionalHeaders, requestBuilder)
+      setHeaders(request.headers, requestBuilder) // todo: translate hyperbus-headers to http
+      if (request.method != Method.GET && !request.body.isInstanceOf[EmptyBody]) {
+        val bodyString = StringSerializer.serializeToString(request.body)
+        requestBuilder.setBody(bodyString)
+      }
 
+      val promise = Promise[Response]()
+      httpClient.executeRequest(requestBuilder.build(), new AsyncCompletionHandler[Response]{
+        override def onCompleted(response: Response): Response = {
+          if (response.getStatusCode < 400) {
 
+          }
 
-        ...
+          promise.success(response)
+          response
+        }
+      })
+
+      promise.future
     } getOrElse {
       Future.failed(new NoTransportRouteException(s"HttpClientTransport. Uri: ${request.uri}"))
     }
@@ -61,7 +77,21 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
   }
 
   private def extractUriAndQueryString(request: TransportRequest): String = {
-    request.
+    val queryString = request.body match {
+      case queryBody: QueryBody ⇒
+        queryBody.toQueryString()
+
+      case dynamic: DynamicBody ⇒
+        QueryBody(dynamic.content).toQueryString()
+
+      case other ⇒
+        ""
+    }
+
+    if (queryString.nonEmpty)
+      request.uri.formatted + "?" + queryString
+    else
+      request.uri.formatted
   }
 
   private def appendUri(prefix: String, postfix: String): String = {
@@ -70,6 +100,12 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
     }
     else {
       prefix + postfix
+    }
+  }
+
+  private def setHeaders(headers: Map[String, Seq[String]], requestBuilder: RequestBuilder): Unit = {
+    headers.foreach { case (header, values) ⇒
+      values.foreach(requestBuilder.addHeader(header, _))
     }
   }
 }

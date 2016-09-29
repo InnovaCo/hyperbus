@@ -23,6 +23,8 @@ trait TransportMessage extends EntityWithHeaders {
 
   def correlationId: String
 
+  def body: Body
+
   def serialize(output: OutputStream)
 }
 
