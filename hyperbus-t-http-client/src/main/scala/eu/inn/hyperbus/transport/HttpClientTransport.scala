@@ -1,6 +1,5 @@
 package eu.inn.hyperbus.transport
 
-import com.sun.tools.javac.util.Log.PrefixKind
 import com.typesafe.config.Config
 import eu.inn.hyperbus.model._
 import eu.inn.hyperbus.serialization.{MessageDeserializer, StringSerializer}
