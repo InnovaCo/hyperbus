@@ -1,15 +1,18 @@
 package eu.inn.hyperbus.transport
 
+import java.io.{ByteArrayInputStream, SequenceInputStream}
+
 import com.typesafe.config.Config
 import eu.inn.hyperbus.model._
 import eu.inn.hyperbus.serialization.{MessageDeserializer, StringSerializer}
 import eu.inn.hyperbus.transport.api.{TransportRequest, _}
-import eu.inn.hyperbus.transport.httpclient.{ConfigLoader, HttpClientConfig, HttpClientRoute}
+import eu.inn.hyperbus.transport.httpclient.{ConfigLoader, HeaderUtils, HttpClientConfig, HttpClientRoute}
 import org.asynchttpclient.{AsyncCompletionHandler, RequestBuilder, Response}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.util.control.NonFatal
 
 class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpClientRoute])
                          (implicit val executionContext: ExecutionContext) extends ClientTransport {
@@ -28,26 +31,42 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
       requestBuilder.setMethod(request.method)
       requestBuilder.setUrl(appendUri(route.urlPrefix, extractUriAndQueryString(request))) // todo: implement rewrite
       setHeaders(route.additionalHeaders, requestBuilder)
-      setHeaders(request.headers, requestBuilder) // todo: translate hyperbus-headers to http
+      setHeaders(HeaderUtils.hyperbusToHttp(request.headers), requestBuilder)
       if (request.method != Method.GET && !request.body.isInstanceOf[EmptyBody]) {
         val bodyString = StringSerializer.serializeToString(request.body)
         requestBuilder.setBody(bodyString)
       }
 
-      val promise = Promise[Response]()
+      val promise = Promise[TransportResponse]()
       httpClient.executeRequest(requestBuilder.build(), new AsyncCompletionHandler[Response]{
         override def onCompleted(response: Response): Response = {
-          if (response.getStatusCode < 400) {
-
+          try {
+            import eu.inn.binders.json._
+            val headers = HeaderUtils.httpToHyperbus(getHeaders(response))
+            val headersJson = headers.toJson
+            val begin = s"""{"status":${response.getStatusCode},"headers":$headersJson,"body":"""
+            val beginStream = new ByteArrayInputStream(begin.getBytes(StringSerializer.defaultEncoding))
+            val nullStream = new ByteArrayInputStream("null".getBytes(StringSerializer.defaultEncoding))
+            val bodyStream = if (response.getStatusCode == 204)
+              nullStream
+            else
+              response.getResponseBodyAsStream
+            val endStream = new ByteArrayInputStream("}".getBytes(StringSerializer.defaultEncoding))
+            val streamAggregate = new SequenceInputStream(beginStream,
+              new SequenceInputStream(bodyStream, endStream)
+            )
+            val output = outputDeserializer(streamAggregate)
+            promise.success(output)
           }
-
-          promise.success(response)
+          catch {
+            case NonFatal(e) ⇒
+              promise.failure(e)
+          }
           response
         }
       })
 
-      //promise.future
-      ???
+      promise.future
     } getOrElse {
       Future.failed(new NoTransportRouteException(s"HttpClientTransport. Uri: ${request.uri}"))
     }
@@ -107,5 +126,10 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
     headers.foreach { case (header, values) ⇒
       values.foreach(requestBuilder.addHeader(header, _))
     }
+  }
+
+  private def getHeaders(response: Response): Map[String, Seq[String]] = {
+    import scala.collection.JavaConversions._
+    response.getHeaders.groupBy(_.getKey).map(kv ⇒ kv._1 → kv._2.map(_.getValue).toSeq)
   }
 }
