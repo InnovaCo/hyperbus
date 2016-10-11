@@ -1,6 +1,8 @@
 package eu.inn.hyperbus.transport.api.matchers
 
 import com.typesafe.config.ConfigValue
+import eu.inn.binders.core.{FieldNotFoundException, ImplicitDeserializer}
+import eu.inn.binders.tconfig.ConfigDeserializer
 import eu.inn.hyperbus.transport.api.TransportRequest
 import eu.inn.hyperbus.transport.api.uri.{Uri, UriPojo}
 
@@ -42,6 +44,12 @@ object RequestMatcher {
     RequestMatcher(pojo.uri.map(Uri.apply), pojo.headers.map { case (k, v) ⇒
       k → TextMatcher(v)
     })
+  }
+
+  implicit val configDeserializer = new ImplicitDeserializer[RequestMatcher, ConfigDeserializer[_]] {
+    override def read(deserializer: ConfigDeserializer[_]): RequestMatcher = deserializer.configValue.map(apply).getOrElse(
+      throw new FieldNotFoundException(deserializer.fieldName.getOrElse(""))
+    )
   }
 }
 

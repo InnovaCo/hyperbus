@@ -46,7 +46,8 @@ class HttpClientTransport(httpClientConfig: HttpClientConfig, routes: List[HttpC
         }
       })
 
-      promise.future
+      //promise.future
+      ???
     } getOrElse {
       Future.failed(new NoTransportRouteException(s"HttpClientTransport. Uri: ${request.uri}"))
     }

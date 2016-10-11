@@ -59,14 +59,16 @@ object HeaderUtils {
   def hyperbusToHttp(hyperbusHeaders: Map[String, Seq[String]], exclude: Set[String] = Set.empty): Map[String, Seq[String]] = {
     hyperbusHeaders.flatMap {
       case (k, _) if exclude.contains(k) ⇒ None
-      case (CONTENT_TYPE_HB, v) ⇒ Some( CONTENT_TYPE →
+      case (CONTENT_TYPE_HB, v) ⇒ Some(CONTENT_TYPE →
         v.flatMap(s ⇒ genericContentTypeToHttp(Some(s)))
       )
       case (k, v) if k.startsWith(HTTP_PREFIX_HB)
         && k.length > HTTP_PREFIX_HB.length ⇒ Some(
-        hyperbusToHttpConverter.convert(k.substring(HTTP_PREFIX_HB.length)) → v
+        fixHyphenFirstLetter(hyperbusToHttpConverter.convert(k.substring(HTTP_PREFIX_HB.length))) → v
       )
-      case (k, v) ⇒ Some(HYPERBUS_PREFIX + hyperbusToHttpConverter.convert(k) → v)
+      case (k, v) ⇒ Some((HYPERBUS_PREFIX + fixHyphenFirstLetter(hyperbusToHttpConverter.convert(k))) → v)
     }
   }
+
+  private def fixHyphenFirstLetter(s: String) = if (s.length > 1) s.substring(0, 1).toUpperCase + s.substring(1) else s
 }

@@ -9,7 +9,7 @@ object ConfigLoader {
     config.read[HttpClientConfig](path)
   }
 
-  def loadRoutes(config: Config, path: String): Seq[HttpClientRoute] = {
-    config.read[Seq[HttpClientRoute]](path)
+  def loadRoutes(config: Config, path: String): List[HttpClientRoute] = {
+    config.read[List[HttpClientRoute]](path)
   }
 }
